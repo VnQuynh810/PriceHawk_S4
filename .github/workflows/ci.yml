@@ -1,0 +1,56 @@
+name: CI — Lint, Test & Build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  web-verify:
+    name: Web (Lint + Jest + Standalone Build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run unit, security & golden normalizer parity tests
+        run: npm test
+
+      - name: Verify Next.js standalone production build
+        env:
+          NEXTAUTH_SECRET: "ci_build_secret_32_chars_minimum_ok"
+          NEXTAUTH_URL: "http://localhost:3000"
+        run: npm run build
+
+  crawler-verify:
+    name: Crawler & Python Normalizer Parity (Pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/crawler
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: apps/crawler/requirements.txt
+
+      - name: Install crawler dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Pytest (Golden Normalizer Parity)
+        run: pytest

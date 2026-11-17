@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1.7
+# Optional Dedicated Dynamic JS / Anti-Bot Worker (enable via `docker compose --profile dynamic up -d`)
+
+FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
+
+WORKDIR /app/crawler
+
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-warn-script-location -r requirements.txt curl_cffi playwright
+
+COPY . .
+
+RUN groupadd --system --gid 1001 dynworker && \
+    useradd --system --uid 1001 --gid dynworker --create-home dynworker && \
+    chown -R dynworker:dynworker /app/crawler
+
+ENV PYTHONUNBUFFERED=1 \
+    TZ=Asia/Ho_Chi_Minh
+
+USER dynworker
+
+CMD ["python3", "dynamic_worker.py"]

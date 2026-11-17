@@ -1,92 +1,118 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mysql:
     image: mysql:8.0
-    container_name: mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: pricecomparison
-      MYSQL_PASSWORD: rootpassword
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-pricecomparison}
+      MYSQL_USER: ${DB_USER:-pricehawk}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-rootpassword}
+    # Bound strictly to localhost — never exposed to public Internet
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
-    command: >
-      --max_connections=30
-      --innodb_buffer_pool_size=128M
-      --tmp_table_size=16M
-      --max_heap_table_size=16M
+      - ./infra/mysql/my.cnf:/etc/mysql/conf.d/pricehawk.cnf:ro
+      - ./infra/mysql/schema/000_init_schema.sql:/docker-entrypoint-initdb.d/000_init_schema.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpassword"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 6
+      start_period: 20s
     deploy:
       resources:
         limits:
-          cpus: '0.30'
-          memory: 300M
+          cpus: "0.35"
+          memory: 384M
         reservations:
-          memory: 200M
+          memory: 220M
+    logging: *default-logging
     networks:
-      - mynetwork
+      mynetwork:
+        aliases:
+          - mysql
 
-  main:
-    container_name: pricecomparison
+  web:
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/pricehawk/pricehawk}-web:${IMAGE_TAG:-latest}
     build:
-      context: .
+      context: ./apps/web
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
     env_file:
       - .env.product
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_POOL_LIMIT: "10"
+      CHATBOT_SERVICE_URL: http://chatbot:8000
     depends_on:
       mysql:
         condition: service_healthy
     restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 200M
+          cpus: "0.30"
+          memory: 220M
         reservations:
-          memory: 100M
+          memory: 110M
+    logging: *default-logging
     networks:
-      - mynetwork
+      mynetwork:
+        aliases:
+          - web
+          - pricecomparison
 
   crawler:
-    container_name: price_hawk_crawler
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/pricehawk/pricehawk}-crawler:${IMAGE_TAG:-latest}
     build:
-      context: .
-      dockerfile: price-hawk/docker/Dockerfile.cron
-    volumes:
-      - ./price-hawk:/app/price-hawk
-      - ./price-hawk/logs:/app/price-hawk/logs
+      context: ./apps/crawler
+      dockerfile: Dockerfile
     env_file:
-      - ./price-hawk/.env.product
+      - .env.product
     environment:
-      - TZ=Asia/Ho_Chi_Minh
+      TZ: Asia/Ho_Chi_Minh
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      CRAWLER_MAX_WORKERS: "2"
+      RUN_ON_STARTUP: "true"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 192M
+        reservations:
+          memory: 64M
+    logging: *default-logging
     networks:
       - mynetwork
 
   chatbot:
-    container_name: pricehawk_chatbot
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/pricehawk/pricehawk}-chatbot:${IMAGE_TAG:-latest}
     build:
-      context: ./chatbot
+      context: ./apps/chatbot
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
-      - ./chatbot/.env.product
+      - .env.product
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      CHATBOT_DB_POOL_LIMIT: "5"
+      SEARXNG_URL: http://searxng:8080
     depends_on:
       mysql:
         condition: service_healthy
@@ -96,36 +122,84 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 256M
+          cpus: "0.20"
+          memory: 160M
         reservations:
-          memory: 128M
+          memory: 80M
+    logging: *default-logging
     networks:
-      mynetwork:        # ← object, không phải array
+      mynetwork:
         aliases:
           - chatbot
 
-
   searxng:
     image: searxng/searxng:latest
-    container_name: searxng
     ports:
-      - "8083:8080"
+      - "127.0.0.1:8083:8080"
     environment:
-      - SEARXNG_SECRET_KEY=pricehawk-secret-key-2026
-      - SEARXNG_BIND_ADDRESS=0.0.0.0:8080
-      - SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
-      - SEARXNG_UWSGI_WORKERS=2
+      SEARXNG_SECRET_KEY: ${SEARXNG_SECRET_KEY:-pricehawk-internal-searxng-key}
+      SEARXNG_BIND_ADDRESS: 0.0.0.0:8080
+      SEARXNG_SETTINGS_PATH: /etc/searxng/settings.yml
+      SEARXNG_UWSGI_WORKERS: "1"
+      SEARXNG_UWSGI_THREADS: "2"
     volumes:
-      - ./searxng_settings.yml:/etc/searxng/settings.yml:ro
+      - ./infra/searxng/settings.yml:/etc/searxng/settings.yml:ro
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          cpus: '0.15'
-          memory: 150M
+          cpus: "0.15"
+          memory: 128M
         reservations:
           memory: 64M
+    logging: *default-logging
+    networks:
+      mynetwork:
+        aliases:
+          - searxng
+
+  # Tier-2 / Tier-3 Horizontal Scaling Shared Cache (enable with: docker compose --profile scale up -d)
+  redis:
+    image: redis:7-alpine
+    profiles: ["scale", "dynamic"]
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 80M
+    logging: *default-logging
+    networks:
+      mynetwork:
+        aliases:
+          - redis
+
+  # Optional Headless JS / Anti-Bot Escalation Worker (enable with: docker compose --profile dynamic up -d)
+  dynamic-worker:
+    build:
+      context: ./apps/crawler
+      dockerfile: Dockerfile.dynamic
+    profiles: ["dynamic"]
+    env_file:
+      - .env.product
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
+    logging: *default-logging
     networks:
       - mynetwork
 
@@ -134,3 +208,4 @@ volumes:
 
 networks:
   mynetwork:
+    name: pricehawk_network

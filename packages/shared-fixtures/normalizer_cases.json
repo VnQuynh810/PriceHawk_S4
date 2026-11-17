@@ -1,0 +1,87 @@
+[
+  {
+    "description": "Phone with Vietnamese diacritics, noise words, ROM and desert color",
+    "input": {
+      "name": "Điện thoại iPhone 16 Pro Max 256GB Sa Mạc Chính hãng",
+      "brand": "Apple",
+      "category": "dien-thoai"
+    },
+    "expected": {
+      "brandNorm": "apple",
+      "modelKey": "apple-iphone-16-pro-max",
+      "variantKey": "ram-na_rom-256g_color-desert",
+      "identityKey": "apple_apple-iphone-16-pro-max_ram-na_rom-256g_color-desert",
+      "ramNorm": null,
+      "romNorm": "256g",
+      "colorNorm": "desert"
+    }
+  },
+  {
+    "description": "Phone with 5G token preserved and RAM/ROM slash pair",
+    "input": {
+      "name": "Samsung Galaxy S24 Ultra 5G 12/512 Đen",
+      "brand": "Samsung",
+      "category": "dien-thoai"
+    },
+    "expected": {
+      "brandNorm": "samsung",
+      "modelKey": "samsung-galaxy-s24-ultra-5g",
+      "variantKey": "ram-12g_rom-512g_color-black",
+      "identityKey": "samsung_samsung-galaxy-s24-ultra-5g_ram-12g_rom-512g_color-black",
+      "ramNorm": "12g",
+      "romNorm": "512g",
+      "colorNorm": "black"
+    }
+  },
+  {
+    "description": "Laptop with inferred Apple brand and TB storage",
+    "input": {
+      "name": "Laptop MacBook Pro 14 M3 16GB 1TB Chính hãng",
+      "brand": null,
+      "category": "laptop"
+    },
+    "expected": {
+      "brandNorm": "apple",
+      "modelKey": "apple-macbook-pro-14-m3",
+      "variantKey": "ram-16g_rom-1t",
+      "identityKey": "apple_apple-macbook-pro-14-m3_ram-16g_rom-1t",
+      "ramNorm": "16g",
+      "romNorm": "1t",
+      "colorNorm": null
+    }
+  },
+  {
+    "description": "Tablet with Vietnamese category noise and multi-word color",
+    "input": {
+      "name": "Máy tính bảng iPad mini 7 WiFi 128GB Xanh Dương",
+      "brand": null,
+      "category": "may-tinh-bang"
+    },
+    "expected": {
+      "brandNorm": "apple",
+      "modelKey": "apple-ipad-mini-7-wifi",
+      "variantKey": "ram-na_rom-128g_color-blue",
+      "identityKey": "apple_apple-ipad-mini-7-wifi_ram-na_rom-128g_color-blue",
+      "ramNorm": null,
+      "romNorm": "128g",
+      "colorNorm": "blue"
+    }
+  },
+  {
+    "description": "Redmi sub-brand mapped to Xiaomi",
+    "input": {
+      "name": "Điện thoại Redmi Note 13 Pro 5G RAM 8GB 256GB Tím",
+      "brand": "Xiaomi",
+      "category": "dien-thoai"
+    },
+    "expected": {
+      "brandNorm": "xiaomi",
+      "modelKey": "xiaomi-redmi-note-13-pro-5g",
+      "variantKey": "ram-8g_rom-256g_color-purple",
+      "identityKey": "xiaomi_xiaomi-redmi-note-13-pro-5g_ram-8g_rom-256g_color-purple",
+      "ramNorm": "8g",
+      "romNorm": "256g",
+      "colorNorm": "purple"
+    }
+  }
+]

@@ -1,0 +1,31 @@
+# Local Development Compose Override
+# Run with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+services:
+  mysql:
+    ports:
+      - "3307:3306"
+
+  web:
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: development
+      DB_HOST: mysql
+      DB_PORT: "3306"
+
+  chatbot:
+    env_file:
+      - .env.local
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/chatbot:/app
+
+  crawler:
+    env_file:
+      - .env.local
+    environment:
+      RUN_ON_STARTUP: "false"
+    volumes:
+      - ./apps/crawler:/app/crawler
